@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <stdint.h>
+
 typedef union
 {
     unsigned long l;
@@ -23,4 +25,14 @@ int main()
     }
     printf("\n");
     return 0;
+}
+
+uint32_t endian_trans(uint32_t src)
+{
+    uint32_t b0, b1, b2, b3;
+    b0 = (src & 0x000000ff) << 24u;
+    b1 = (src & 0x0000ff00) << 8u;
+    b2 = (src & 0x00ff0000) >> 8u;
+    b3 = (src & 0xff000000) >> 24u;
+    return b0 | b1 | b2 | b3;
 }
