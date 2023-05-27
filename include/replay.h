@@ -48,6 +48,12 @@ struct frame_arr
 
 extern struct frame_arr frame_buf;
 
+void send_ack(Dev dev,
+              Net net,
+              Esp esp,
+              Txp txp,
+              uint8_t *last_sent_pkt);
+
 void tx_esp_rep(Dev dev,
                 Net net,
                 Esp esp,
