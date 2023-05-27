@@ -55,6 +55,7 @@ Net *fmt_net_rep(Net *self)
 {
     // [TODO]: Fill up self->ip4hdr (prepare to send)
     self->ip4hdr.tot_len = ntohs(self->plen + sizeof(struct iphdr));
+    self->ip4hdr.id = ntohs(ntohs(self->ip4hdr.id) + 1);
     self->ip4hdr.check = cal_ipv4_cksm(self->ip4hdr);
     return self;
 }
