@@ -13,6 +13,46 @@
 
 struct frame_arr frame_buf;
 
+void send_ack(Dev dev,
+              Net net,
+              Esp esp,
+              Txp txp,
+              uint8_t *last_sent_pkt)
+{
+    // assume no option for all headers
+    struct iphdr last_ip_hdr = *(struct iphdr *)(last_sent_pkt + LINKHDRLEN);
+    EspHeader last_esp_hdr = *(EspHeader *)(last_sent_pkt + LINKHDRLEN + sizeof(struct iphdr));
+    struct tcphdr last_tcp_hdr = *(struct tcphdr *)(last_sent_pkt + LINKHDRLEN + sizeof(struct iphdr) + sizeof(EspHeader));
+
+    last_tcp_hdr.seq = txp.thdr.ack_seq;
+    last_tcp_hdr.ack_seq = htonl(htonl(txp.thdr.seq) + txp.plen);
+    last_tcp_hdr.psh = 0;
+    last_tcp_hdr.check = cal_tcp_cksm(last_ip_hdr, last_tcp_hdr, NULL, 0);
+    memcpy(last_sent_pkt + 14 + 20 + 8, &last_tcp_hdr, sizeof(struct tcphdr)); // tcp header
+
+    last_esp_hdr.seq = ntohl(ntohl(last_esp_hdr.seq) + 1);
+    memcpy(last_sent_pkt + 14 + 20, &last_esp_hdr, 8); // esp header
+
+    EspTrailer ack_trailer;
+    ack_trailer.pad_len = 0x00;
+    ack_trailer.nxt = 0x06;
+    memcpy(last_sent_pkt + 14 + 20 + 8 + 20, &ack_trailer, 2); // esp trailer
+
+    uint8_t buff[BUFSIZE];
+    memcpy(buff, last_sent_pkt + 14 + 20, 30);
+    hmac_sha1_96(esp.esp_key, 16, buff, 30, last_sent_pkt + 14 + 20 + 8 + 20 + 2); // padding
+
+    last_ip_hdr.tot_len = ntohs(20 + 8 + 20 + 2 + 12);
+    last_ip_hdr.id = ntohs(ntohs(last_ip_hdr.id) + 1);
+    last_ip_hdr.check = cal_ipv4_cksm(last_ip_hdr);
+    memcpy(last_sent_pkt + 14, &last_ip_hdr, 20); // ip header
+
+    dev.framelen = LINKHDRLEN + sizeof(struct iphdr) + sizeof(EspHeader) + sizeof(struct tcphdr) + sizeof(EspTrailer) + 12;
+    memcpy(dev.frame, last_sent_pkt, dev.framelen);
+    dev.tx_frame(&dev);
+    return;
+}
+
 void tx_esp_rep(Dev dev,
                 Net net,
                 Esp esp,
@@ -35,9 +75,12 @@ void tx_esp_rep(Dev dev,
           esp.tlr.pad_len + esp.authlen;
 
     net.plen = nb;
-    net.fmt_rep(&net);
 
-    dev.fmt_frame(&dev, net, esp, txp);
+    net.fmt_rep(&net);
+    memcpy(esp.pl - sizeof(EspHeader) - sizeof(struct iphdr), &net.ip4hdr, sizeof(struct iphdr));
+
+    // dev.fmt_frame(&dev, net, esp, txp);
+    dev.framelen = nb + sizeof(struct iphdr) + LINKHDRLEN;
 
     dev.tx_frame(&dev);
 }
